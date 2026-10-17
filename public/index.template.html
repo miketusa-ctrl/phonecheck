@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhoneCheck: free phone number validator and formatter (E.164, international, national)</title>
+<meta name="description" content="Paste a phone number. PhoneCheck checks it against Google's libphonenumber metadata and returns E.164, international and national formats, the region and the line type. Offline, nothing stored.">
+<link rel="stylesheet" href="/style.css">
+<link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt">
+<link rel="service-desc" type="application/json" href="/openapi.json" title="OpenAPI 3.1">
+</head>
+<body>
+<!--STAGING-->
+<header>
+  <a class="brand" href="/">PhoneCheck</a>
+  <nav><a href="/">Checker</a><a href="/docs">API docs</a><a href="/docs#privacy">Privacy</a></nav>
+</header>
+<main>
+  <h1>Check and format a phone number</h1>
+  <p class="lead">Paste a phone number in any common format. PhoneCheck tells you whether it is valid for its region and gives you the E.164, international, national and <code>tel:</code> forms, plus the line type when the numbering plan defines it.</p>
+
+  <form class="check" id="form" method="post" action="/" autocomplete="off">
+    <input id="number" name="number" aria-label="Phone number" maxlength="{{maxNumberLength}}" placeholder="e.g. +44 20 7946 0018 or (213) 373-4253" spellcheck="false" inputmode="tel" required>
+    <select id="country" name="country" aria-label="Default country for numbers without +country code">
+      <option value="">No default country (number starts with +)</option>
+{{countryOptions}}
+    </select>
+    <button id="go" type="submit">Check</button>
+  </form>
+  <div class="examples">Try:
+    <button type="button" data-number="+1 213 373 4253" data-country="">US</button>
+    <button type="button" data-number="020 7946 0018" data-country="GB">UK landline</button>
+    <button type="button" data-number="07400 123456" data-country="GB">UK mobile</button>
+    <button type="button" data-number="0800 123 4567" data-country="GB">UK toll-free</button>
+    <button type="button" data-number="+49 30 1234567 ext. 89" data-country="">DE with extension</button>
+    <button type="button" data-number="+1 555 555 5555" data-country="">invalid US</button>
+  </div>
+
+  <div id="result" aria-live="polite"><!--RESULT--></div>
+
+  <div class="disclaimer" role="note">
+    <strong>Offline numbering-plan check. No carrier or live-line lookup.</strong>
+    "Valid" means the number matches a range allocated in Google's libphonenumber metadata. It does not mean the line is connected, reachable, or belongs to anyone in particular. Line type shows the original allocation; a number ported to another network or service may differ.
+  </div>
+
+  <h2>What you get</h2>
+  <ul class="features">
+    <li><strong>Valid / possible</strong>: whether the digits match an allocated range, or at least a possible length, for the region.</li>
+    <li><strong>Formats</strong>: E.164 (<code>+442079460018</code>), international, national and RFC 3966 (<code>tel:</code>).</li>
+    <li><strong>Region</strong>: ISO country code and calling code, or "non-geographic" for global services such as +800.</li>
+    <li><strong>Line type</strong> when the metadata defines it: mobile, fixed line, toll-free, premium rate, shared cost, VoIP, personal number, pager, UAN or voicemail. Some plans (US, Canada) don't separate mobile from fixed line, so you get <code>fixed_line_or_mobile</code>.</li>
+    <li><strong>The reason</strong> when it fails: too short, too long, no country code, or not an allocated range.</li>
+  </ul>
+
+  <h2>Use it from code</h2>
+  <pre><code>curl -X POST https://<span id="host">phonecheck</span>/v1/parse \
+  -H "Content-Type: application/json" \
+  -d '{"number": "020 7946 0018", "defaultCountry": "GB"}'</code></pre>
+  <p>POST keeps the number out of URLs. Light use works without an API key, with a per-IP rate limit. Pro keys can normalise up to {{bulkMax}} numbers per request with <code>POST /v1/bulk</code>. See the <a href="/docs">API docs</a>.</p>
+
+  <h2>Privacy</h2>
+  <p>Numbers are processed in memory to build the response, then discarded. They are not stored or logged; PhoneCheck keeps request counts only. This checker sends the number in the request body, never in the URL. <a href="/docs#privacy">Privacy note</a>.</p>
+<section id="agents" class="wrap"><h2>For AI agents (MCP)</h2>
+<p>PhoneCheck is also a remote <a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> (MCP) server with the tools <code>parse_phone_number</code> and <code>get_example_number</code> (same offline engine, keys and limits as the API). Most MCP clients accept this config; some use a different format (for example, VS Code uses a <code>servers</code> key). Clients with a settings screen just need the URL <code>https://phonecheck.mike-tusa.workers.dev/mcp</code>.</p>
+<pre><code id="mcp-config">{ "mcpServers": { "phonecheck": { "type": "http", "url": "https://phonecheck.mike-tusa.workers.dev/mcp" } } }</code></pre>
+<p class="small">Machine-readable docs: <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">OpenAPI 3.1 spec</a></p></section>
+</main>
+<footer>
+  PhoneCheck &middot; <a href="/docs">API docs</a> &middot; <a href="/docs#privacy">Privacy</a> &middot; Numbering-plan metadata: Google libphonenumber via libphonenumber-js {{metadataVersion}} (Apache-2.0 / MIT).
+</footer>
+<script src="/app.js"></script>
+</body>
+</html>

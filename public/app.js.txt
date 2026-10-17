@@ -1,0 +1,91 @@
+(function () {
+  'use strict';
+  Array.prototype.forEach.call(document.querySelectorAll('#host, .h'), function (n) { n.textContent = location.host; });
+  var base = document.getElementById('base');
+  if (base) base.textContent = location.origin;
+  var form = document.getElementById('form');
+  if (!form) return; // docs page: only the host placeholders above
+  var input = document.getElementById('number');
+  var country = document.getElementById('country');
+  var btn = document.getElementById('go');
+  var out = document.getElementById('result');
+
+  var LT = { mobile: 'Mobile', fixed_line: 'Fixed line', fixed_line_or_mobile: 'Fixed line or mobile', toll_free: 'Toll-free',
+    premium_rate: 'Premium rate', shared_cost: 'Shared cost', voip: 'VoIP', personal_number: 'Personal number', pager: 'Pager',
+    uan: 'UAN (company number)', voicemail: 'Voicemail' };
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function render(r) {
+    out.textContent = '';
+    var box = el('div', 'verdict ' + (r.valid ? 'ok' : 'bad'));
+    box.appendChild(el('div', 'title', r.valid ? 'Valid number' : (r.possible ? 'Possible but not valid' : 'Not a valid number')));
+    box.appendChild(el('div', 'reason', r.message ? 'Reason: ' + r.message : 'Matches an allocated number range. This does not prove the line is connected or reachable.'));
+    var rows = [
+      ['E.164', r.e164], ['International', r.international], ['National', r.national], ['RFC 3966', r.rfc3966],
+      ['Region', r.country ? r.country_name + ' (' + r.country + ')' : (r.non_geographic ? 'Non-geographic (global service)' : null)],
+      ['Calling code', r.calling_code ? '+' + r.calling_code : null],
+      ['Line type (from metadata)', r.line_type ? (LT[r.line_type] || r.line_type) : null],
+      ['Extension', r.extension],
+      ['Could be in', r.possible_countries ? r.possible_countries.join(', ') : null],
+      ['Example number', r.example ? r.example.international + ' (' + r.example.country + ' mobile example)' : null]
+    ];
+    var t = el('table', 'kv');
+    rows.forEach(function (row) {
+      if (!row[1]) return;
+      var tr = el('tr');
+      tr.appendChild(el('th', '', row[0]));
+      tr.appendChild(el('td', '', String(row[1])));
+      t.appendChild(tr);
+    });
+    if (t.childNodes.length) box.appendChild(t);
+    out.appendChild(box);
+  }
+
+  function showError(msg) {
+    out.textContent = '';
+    out.appendChild(el('p', 'error', msg));
+  }
+
+  function check() {
+    var number = input.value.trim();
+    if (!number) return;
+    btn.disabled = true;
+    // POST with a JSON body keeps the number out of the URL (request logs, proxies, browser history).
+    var payload = { number: number };
+    if (country.value) payload.defaultCountry = country.value;
+    fetch('/v1/parse', {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'omit',
+      cache: 'no-store'
+    })
+      .then(function (res) {
+        return res.json().then(function (body) { return { status: res.status, body: body }; });
+      })
+      .then(function (x) {
+        if (x.status === 200) render(x.body);
+        else showError((x.body && x.body.error && x.body.error.message) || ('Request failed (HTTP ' + x.status + ').'));
+      })
+      .catch(function () { showError('Network error. Please try again.'); })
+      .then(function () { btn.disabled = false; });
+  }
+
+  form.addEventListener('submit', function (e) { e.preventDefault(); check(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.examples button'), function (b) {
+    b.addEventListener('click', function () {
+      input.value = b.getAttribute('data-number');
+      country.value = b.getAttribute('data-country') || '';
+      check();
+    });
+  });
+})();
+
+// MCP client config shows this deployment's own origin.
+(function () { var el = document.getElementById('mcp-config'); if (el) el.textContent = JSON.stringify({ mcpServers: { 'phonecheck': { type: 'http', url: location.origin + '/mcp' } } }, null, 2); })();

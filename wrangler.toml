@@ -1,0 +1,99 @@
+# Public template. Replace every <PLACEHOLDER> with your own Cloudflare resource IDs
+# (wrangler kv namespace create / wrangler d1 create). Rate-limit namespace IDs must be
+# unique integers within your account. Secrets go in `wrangler secret put`, never here.
+
+name = "phonecheck-staging"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+preview_urls = false
+
+[limits]
+cpu_ms = 100
+
+[observability]
+enabled = false
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.css", "**/*.txt"]
+fallthrough = true
+
+[vars]
+PUBLIC_LAUNCH = "false"
+VALIDATE_LIMIT_PER_MIN = "20"
+KEY_LIMIT_PER_MIN = "300"
+FREE_MONTHLY_QUOTA = "1000"
+PRO_MONTHLY_QUOTA = "50000"
+DAILY_CALL_POOL = "15000"
+DAILY_ANON_POOL = "10000"
+MCP_REGISTRY_AUTH = ""
+
+[[unsafe.bindings]]
+name = "VALIDATE_LIMITER"
+type = "ratelimit"
+namespace_id = "<RATE_LIMIT_NAMESPACE_ID_1>"
+simple = { limit = 20, period = 60 }
+
+[[unsafe.bindings]]
+name = "KEY_LIMITER"
+type = "ratelimit"
+namespace_id = "<RATE_LIMIT_NAMESPACE_ID_2>"
+simple = { limit = 300, period = 60 }
+
+[[kv_namespaces]]
+binding = "KEYS"
+id = "<KV_NAMESPACE_ID>"
+
+[[durable_objects.bindings]]
+name = "QUOTA"
+class_name = "KeyQuota"
+
+[[migrations]]
+tag = "v1-keyquota-sqlite"
+new_sqlite_classes = ["KeyQuota"]
+
+[env.production]
+name = "phonecheck"
+workers_dev = true
+preview_urls = false
+
+[env.production.limits]
+cpu_ms = 100
+
+[env.production.observability]
+enabled = false
+
+[env.production.vars]
+PUBLIC_LAUNCH = "true"
+MCP_REGISTRY_AUTH = ""
+VALIDATE_LIMIT_PER_MIN = "20"
+KEY_LIMIT_PER_MIN = "300"
+FREE_MONTHLY_QUOTA = "1000"
+PRO_MONTHLY_QUOTA = "50000"
+DAILY_CALL_POOL = "15000"
+DAILY_ANON_POOL = "10000"
+
+[[env.production.unsafe.bindings]]
+name = "VALIDATE_LIMITER"
+type = "ratelimit"
+namespace_id = "<RATE_LIMIT_NAMESPACE_ID_3>"
+simple = { limit = 20, period = 60 }
+
+[[env.production.unsafe.bindings]]
+name = "KEY_LIMITER"
+type = "ratelimit"
+namespace_id = "<RATE_LIMIT_NAMESPACE_ID_4>"
+simple = { limit = 300, period = 60 }
+
+[[env.production.kv_namespaces]]
+binding = "KEYS"
+id = "<PRODUCTION_KV_NAMESPACE_ID>"
+
+[[env.production.durable_objects.bindings]]
+name = "QUOTA"
+class_name = "KeyQuota"
+
+[[env.production.migrations]]
+tag = "v1-keyquota-sqlite"
+new_sqlite_classes = ["KeyQuota"]

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dev.workers.mike-tusa.phonecheck/phonecheck",
+  "title": "PhoneCheck",
+  "description": "Offline phone-number validation and formatting (E.164, region, line type). No carrier lookup.",
+  "version": "0.2.2",
+  "websiteUrl": "https://phonecheck.mike-tusa.workers.dev/",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://phonecheck.mike-tusa.workers.dev/mcp",
+      "headers": [
+        { "name": "Authorization", "description": "Optional. 'Bearer <key>' for higher limits. Works without a key.", "isRequired": false, "isSecret": true }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "phonecheck",
+  "version": "0.2.2",
+  "private": true,
+  "description": "PhoneCheck: offline phone-number validation + formatting API and free paste-a-number tool (Cloudflare Worker, libphonenumber-js metadata, no carrier lookups)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "libphonenumber-js": "1.13.14"
+  },
+  "license": "MIT"
+}

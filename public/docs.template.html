@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhoneCheck API docs: phone number validation and formatting (E.164, line type), offline</title>
+<meta name="description" content="PhoneCheck API reference: endpoints, examples, limits, errors and privacy for offline phone number validation and formatting based on libphonenumber metadata.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<!--STAGING-->
+<header>
+  <a class="brand" href="/">PhoneCheck</a>
+  <nav><a href="/">Checker</a><a href="/docs">API docs</a><a href="/docs#privacy">Privacy</a></nav>
+</header>
+<main>
+  <h1>API docs</h1>
+  <p class="lead">A JSON API that validates and formats phone numbers offline, using Google's libphonenumber numbering-plan metadata (libphonenumber-js {{metadataVersion}}, "max" set, {{regionCount}} regions). Base URL: <code id="base">https://phonecheck</code></p>
+
+  <div class="disclaimer" role="note">
+    <strong>Numbering-plan check only. No carrier, HLR or live-line lookup.</strong>
+    "Valid" means the number matches a range allocated in the metadata. PhoneCheck does not know whether a number is connected, reachable, active, or who holds it, and it does not identify the carrier. Line type reflects the original allocation; ported numbers may differ. Don't use it as your only fraud, KYC or deliverability control.
+  </div>
+
+  <h2>Endpoints</h2>
+  <table class="grid">
+    <tr><th>Method and path</th><th>What it does</th><th>Key</th></tr>
+    <tr><td><code>POST /v1/parse</code></td><td>Validate and format one number. Body <code>{"number": "...", "defaultCountry": "US"}</code> (<code>defaultCountry</code> optional). <strong>Recommended.</strong></td><td>optional</td></tr>
+    <tr><td><code>GET /v1/parse/{number}</code></td><td>Same, with the number in the URL (URL-encode <code>+</code> as <code>%2B</code>; optional <code>?defaultCountry=GB</code>). <strong>Staging / quick tests only</strong> — disabled in production (<code>PUBLIC_LAUNCH=true</code> → 405). Prefer POST: URLs end up in logs and history.</td><td>optional (staging)</td></tr>
+    <tr><td><code>POST /v1/bulk</code></td><td>Up to {{bulkMax}} numbers in one request, for normalising lists</td><td>Pro key</td></tr>
+    <tr><td><code>GET /v1/example/{country}</code></td><td>Example (mobile) number for a region in every format</td><td>optional</td></tr>
+    <tr><td><code>GET /v1/countries</code></td><td>Supported region codes, names and calling codes</td><td>optional</td></tr>
+    <tr><td><code>GET /v1/meta</code></td><td>Version, build, metadata version, limits</td><td>optional</td></tr>
+  </table>
+
+  <div class="endpoint" id="parse">
+    <h3><span class="method post">POST</span><code>/v1/parse</code></h3>
+    <p>Send the number as typed: spaces, dashes, dots, brackets, a leading <code>00</code>/<code>+</code> and extensions (<code>ext. 89</code>, <code>x89</code>) are understood. Numbers without a <code>+country code</code> need <code>defaultCountry</code> (ISO 3166-1 alpha-2, e.g. <code>GB</code>). Max {{maxNumberLength}} characters; body max {{singleBodyKb}} KB.</p>
+    <pre><code>curl -X POST https://<span class="h">phonecheck</span>/v1/parse \
+  -H "Content-Type: application/json" \
+  -d '{"number": "020 7946 0018", "defaultCountry": "GB"}'</code></pre>
+    <pre><code>{{example:020 7946 0018:GB}}</code></pre>
+    <p>An invalid number still returns <strong>200</strong>, with <code>valid: false</code>, a <code>reason</code> code and a <code>message</code>:</p>
+    <pre><code>{{exampleshort:+1 555 555 5555:}}</code></pre>
+    <p>Formats (<code>e164</code>, <code>international</code>, <code>national</code>, <code>rfc3966</code>) are filled in when the number is at least <em>possible</em> (right length); otherwise they are <code>null</code>. <code>line_type</code> is set only for valid numbers, and only when the metadata defines it.</p>
+  </div>
+
+  <h3>Response fields</h3>
+  <table class="grid">
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>valid</code></td><td>Matches an allocated number range for the region (length and leading digits)</td></tr>
+    <tr><td><code>possible</code></td><td>Has a possible length for the region (a weaker check than <code>valid</code>)</td></tr>
+    <tr><td><code>reason</code>, <code>message</code></td><td>Only when not valid: <code>not_a_number</code>, <code>invalid_country</code>, <code>too_short</code>, <code>too_long</code>, <code>invalid_length</code>, <code>not_valid_number</code>, <code>input_too_long</code></td></tr>
+    <tr><td><code>e164</code></td><td>E.164 form, e.g. <code>+442079460018</code> (no extension)</td></tr>
+    <tr><td><code>international</code>, <code>national</code></td><td>Human-readable formats for the region, extension included</td></tr>
+    <tr><td><code>rfc3966</code></td><td><code>tel:</code> URI, e.g. <code>tel:+49301234567;ext=89</code></td></tr>
+    <tr><td><code>country</code>, <code>country_name</code></td><td>ISO region code and English name. <code>null</code> for non-geographic numbers (<code>non_geographic: true</code>, e.g. +800) and for invalid numbers whose calling code is shared (then <code>possible_countries</code> lists the candidates)</td></tr>
+    <tr><td><code>calling_code</code>, <code>national_number</code>, <code>extension</code></td><td>Parts of the number</td></tr>
+    <tr><td><code>line_type</code></td><td>{{lineTypes}}, or <code>null</code> when the metadata can't tell</td></tr>
+    <tr><td><code>example</code></td><td>A mobile example number for the region (single-number endpoints only), for format hints</td></tr>
+  </table>
+
+  <div class="endpoint" id="bulk">
+    <h3><span class="method post">POST</span><code>/v1/bulk</code> <small>(Pro key)</small></h3>
+    <p>Normalise a list: up to {{bulkMax}} numbers per request, body max {{bulkBodyKb}} KB. Items are strings, or objects <code>{"number": "...", "defaultCountry": "FR"}</code> to override the request-level <code>defaultCountry</code>. Each number counts as one call toward the monthly quota; the whole request is refused (nothing charged) if it doesn't fit in what's left. Results come back in input order with the same fields as <code>/v1/parse</code> (minus <code>example</code>), plus <code>index</code>.</p>
+    <pre><code>curl -X POST https://<span class="h">phonecheck</span>/v1/bulk \
+  -H "Authorization: Bearer pc_live_..." -H "Content-Type: application/json" \
+  -d '{"defaultCountry": "US", "numbers": ["(213) 373-4253", "+44 20 7946 0018", {"number": "01 23 45 67 89", "defaultCountry": "FR"}, "12"]}'</code></pre>
+    <pre><code>{{bulk}}</code></pre>
+  </div>
+
+  <div class="endpoint" id="example">
+    <h3><span class="method">GET</span><code>/v1/example/{country}</code></h3>
+    <pre><code>{{exampleNumber:DE}}</code></pre>
+    <p>Example numbers come from the libphonenumber metadata. They are for testing formats; don't dial them.</p>
+  </div>
+
+  <h2 id="auth">API keys and limits</h2>
+  <p>No key is needed for light use. Send a key as <code>Authorization: Bearer pc_live_...</code> or <code>X-Api-Key: pc_live_...</code>. Keys are issued by the operator in this version (no self-serve sign-up yet).</p>
+  <table class="grid">
+    <tr><th>Tier</th><th>Rate</th><th>Monthly calls</th><th>Bulk</th></tr>
+    <tr><td>Anonymous (no key)</td><td>{{anonPerMin}} requests/minute per IP</td><td>shared daily capacity</td><td>no</td></tr>
+    <tr><td>Free key</td><td>{{keyPerMin}} requests/minute</td><td>{{freePerMonth}}</td><td>no</td></tr>
+    <tr><td>Pro key</td><td>{{keyPerMin}} requests/minute</td><td>{{proPerMonth}} (a bulk request counts one per number)</td><td>up to {{bulkMax}} numbers/request</td></tr>
+  </table>
+  <p>Keyed responses carry <code>X-Quota-Limit</code> and <code>X-Quota-Remaining</code>. Quotas reset at 00:00 UTC on the 1st. A global daily soft cap protects the service; when it is reached, requests get <code>429 daily_capacity_reached</code> until 00:00 UTC.</p>
+
+  <h2 id="errors">Errors</h2>
+  <p>Errors are JSON: <code>{"error": {"code": "...", "message": "..."}}</code>.</p>
+  <table class="grid">
+    <tr><th>Status</th><th>Codes</th></tr>
+    <tr><td>400</td><td><code>invalid_json</code>, <code>invalid_body</code>, <code>missing_number</code>, <code>input_too_long</code>, <code>invalid_default_country</code>, <code>number_in_url</code>, <code>invalid_bulk</code>, <code>empty_bulk</code>, <code>bulk_too_large</code>, <code>bad_encoding</code></td></tr>
+    <tr><td>401</td><td><code>invalid_api_key</code>, <code>api_key_required</code></td></tr>
+    <tr><td>403</td><td><code>paid_plan_required</code> (bulk with a free key)</td></tr>
+    <tr><td>404</td><td><code>not_found</code>, <code>unknown_country</code></td></tr>
+    <tr><td>405</td><td><code>method_not_allowed</code></td></tr>
+    <tr><td>413</td><td><code>payload_too_large</code> (single {{singleBodyKb}} KB, bulk {{bulkBodyKb}} KB)</td></tr>
+    <tr><td>429</td><td><code>rate_limited</code>, <code>monthly_quota_exceeded</code>, <code>daily_capacity_reached</code> (with <code>Retry-After</code>)</td></tr>
+    <tr><td>503</td><td><code>storage_unavailable</code> (key lookup briefly unavailable)</td></tr>
+  </table>
+
+  <h2 id="limitations">Limitations</h2>
+  <ul>
+    <li><strong>No carrier, HLR, porting or reachability data.</strong> PhoneCheck never contacts a network. It can't tell you whether a number is in service, which carrier serves it now, or whether it can receive SMS.</li>
+    <li>Line type comes from the numbering plan. Mobile numbers ported to fixed or VoIP services (and vice versa) keep their original type. US and Canada numbers are <code>fixed_line_or_mobile</code> because the plan doesn't separate them.</li>
+    <li>Metadata is a snapshot (libphonenumber-js {{metadataVersion}}). New number ranges may show as <code>not_valid_number</code> until the metadata is updated.</li>
+    <li>Short codes, emergency numbers and SMS short numbers are not validated.</li>
+    <li><strong>Bulk max {{bulkMax}} numbers</strong> per request (Pro). Chosen so a cold isolate stays under the Worker <code>cpu_ms = 100</code> cap (a cold 1,000-number bulk once measured ~85 ms). Split larger lists. Atlas can raise <code>cpu_ms</code> if a larger bulk is needed later.</li>
+    <li><code>GET /v1/parse/{number}</code> is for staging / quick tests only. Production returns <strong>405</strong> and points you to <code>POST /v1/parse</code> so numbers never land in URL paths or proxy logs.</li>
+  </ul>
+
+  <h2 id="privacy">Privacy</h2>
+  <ul>
+    <li>Numbers you send are processed in memory to build the response and then discarded. PhoneCheck does not store them, log them, or send them anywhere (no third-party lookups, no analytics).</li>
+    <li>Workers observability/logging is turned off for this service. The only data kept is counters: calls per API key per month, and total calls per day.</li>
+    <li>Use <code>POST</code> so numbers stay out of URLs. The web checker on the home page always uses POST.</li>
+    <li>API keys are stored as SHA-256 hashes; no email or personal data is needed for a key.</li>
+    <li>Like any HTTPS service on Cloudflare, Cloudflare processes connection metadata (such as IP address) to deliver and protect the service; per-IP rate limiting uses it transiently.</li>
+  </ul>
+
+  <h2>Credits</h2>
+  <p>Numbering-plan metadata: Google libphonenumber (Apache-2.0), packaged by libphonenumber-js (MIT).</p>
+</main>
+<footer>
+  PhoneCheck &middot; <a href="/">Checker</a> &middot; <a href="/docs#privacy">Privacy</a> &middot; v{{version}}
+</footer>
+<script src="/app.js"></script>
+</body>
+</html>
